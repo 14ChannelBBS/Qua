@@ -1,8 +1,8 @@
-"""Create threads table
+"""Create responses table
 
-Revision ID: da3f00dde410
-Revises:
-Create Date: 2025-09-20 12:11:41.757944
+Revision ID: 4dab622e073e
+Revises: da3f00dde410
+Create Date: 2025-09-20 19:36:53.578607
 
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "da3f00dde410"
-down_revision: Union[str, Sequence[str], None] = None
+revision: str = "4dab622e073e"
+down_revision: Union[str, Sequence[str], None] = "da3f00dde410"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -21,21 +21,23 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
-        "threads",
+        "responses",
         sa.Column("id", sa.VARCHAR, primary_key=True),
-        sa.Column("title", sa.VARCHAR, nullable=False),
+        sa.Column("parent_id", sa.VARCHAR, nullable=False),
         sa.Column(
             "created_at",
             sa.TIMESTAMP(timezone=True),
             nullable=False,
             server_default="now()",
         ),
-        sa.Column("owner_id", sa.VARCHAR, nullable=False),
-        sa.Column("owner_shown_id", sa.VARCHAR, nullable=False),
+        sa.Column("author_id", sa.VARCHAR, nullable=False),
+        sa.Column("shown_id", sa.VARCHAR, nullable=False),
+        sa.Column("name", sa.VARCHAR, nullable=True),
+        sa.Column("content", sa.VARCHAR, nullable=True),
         sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_table("threads")
+    op.drop_table("responses")
