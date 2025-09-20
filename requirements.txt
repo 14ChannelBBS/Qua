@@ -1,0 +1,6 @@
+asyncpg
+fastapi[all]
+httpx
+alembic
+psycopg2-binary
+python-dotenv
