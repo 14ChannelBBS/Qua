@@ -22,7 +22,8 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
         "ids",
-        sa.Column("id", sa.VARCHAR, primary_key=True),
+        sa.Column("token", sa.VARCHAR, primary_key=True),
+        sa.Column("id", sa.VARCHAR, unique=True),
         sa.Column("ips", sa.ARRAY(sa.VARCHAR), nullable=False),
     )
 

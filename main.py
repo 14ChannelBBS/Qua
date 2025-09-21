@@ -1,10 +1,21 @@
 import glob
 import importlib
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from services.db import DBService
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await DBService.run()
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Qua",
     summary="くあちゃん今日もかわいいね🥰",
     description="A document of qua (14channel backend system)",

@@ -30,6 +30,11 @@ def upgrade() -> None:
             nullable=False,
             server_default="now()",
         ),
+        sa.Column(
+            "sort_key",
+            sa.Integer,
+            nullable=False,
+        ),
         sa.Column("owner_id", sa.VARCHAR, nullable=False),
         sa.Column("owner_shown_id", sa.VARCHAR, nullable=False),
         sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),

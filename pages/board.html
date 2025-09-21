@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{board.name}} on 14Channel</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
+      integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="/static/css/global.css" />
+    <link rel="stylesheet" href="/static/css/board.css" />
+    <script src="/static/js/board.js"></script>
+  </head>
+  <body>
+    <div class="is-loading"><div class="loader"></div></div>
+
+    <section class="section">
+      <div class="container">
+        <div class="logo">
+          <img
+            class="logo"
+            src="/static/images/new_14ch_logo.png"
+            alt="14Channel"
+          />
+        </div>
+        <div class="box">
+          <h1 class="title">{{ board.name }}</h1>
+          <p>{{ board.description }}</p>
+          <p class="has-text-centered"><a href="/">■トップページ■</a></p>
+        </div>
+
+        <hr />
+
+        <div class="thread-list"><span>Now loading...</span></div>
+
+        <hr />
+
+        <div class="box">
+          <h2 class="title is-5">スレッドを作成</h2>
+          <div class="form">
+            <div class="field">
+              <p class="control has-icons-left has-icons-right">
+                <input class="input form-name" type="text" placeholder="名前" />
+                <span class="icon is-small is-left">
+                  <i class="fas fa-user"></i>
+                </span>
+              </p>
+            </div>
+
+            <div class="field">
+              <p class="control has-icons-left has-icons-right">
+                <input
+                  class="input form-command"
+                  type="text"
+                  placeholder="コマンド (認証キーとか色とか)"
+                />
+                <span class="icon is-small is-left">
+                  <i class="fas fa-computer"></i>
+                </span>
+              </p>
+            </div>
+
+            <textarea
+              class="textarea form-content"
+              placeholder="本文"
+            ></textarea>
+          </div>
+        </div>
+        <hr />
+        <p class="has-text-right">14Channel on Qua {{ version }}</p>
+      </div>
+    </section>
+  </body>
+</html>

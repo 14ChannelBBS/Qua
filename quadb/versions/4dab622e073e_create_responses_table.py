@@ -34,6 +34,9 @@ def upgrade() -> None:
         sa.Column("shown_id", sa.VARCHAR, nullable=False),
         sa.Column("name", sa.VARCHAR, nullable=True),
         sa.Column("content", sa.VARCHAR, nullable=True),
+        sa.Column(
+            "reactions", sa.ARRAY(sa.VARCHAR), nullable=False, server_default="{}"
+        ),
         sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),
     )
 

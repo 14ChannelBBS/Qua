@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any, Dict, Union
+from typing import List
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Json
 from pydantic.alias_generators import to_snake
 
 
@@ -13,6 +13,7 @@ class Response(BaseModel):
     shownId: str
     name: str
     content: str
-    attributes: Dict[str, Union[str, int, Dict[Any, Any]]]
+    reactions: List[str]
+    attributes: Json
 
     model_config = ConfigDict(alias_generator=to_snake)
