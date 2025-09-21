@@ -24,17 +24,28 @@ async def getBoard(id: str):
     return Board.model_validate(dict(row))
 
 
-async def getThreadsInBoard(id: str):
+async def getThreadsInBoard(id: str, page: int = 0):
     typeAdapter = TypeAdapter(List[Thread])
 
     rows = []
 
+    PAGE_SIZE = 20
+
     for _row in await DBService.pool.fetch(
-        "SELECT * FROM threads WHERE id like $1", f"{id}_%"
+        """
+            SELECT *
+            FROM threads
+            WHERE id LIKE $1
+            ORDER BY sort_key DESC
+            OFFSET $2 LIMIT $3
+        """,
+        f"{id}_%",
+        page * PAGE_SIZE,
+        PAGE_SIZE,
     ):
         row = dict(_row)
         row["count"] = await DBService.pool.fetchval(
-            "SELECT COUNT(*) FROM responses WHERE parent_id = $1 ORDER by sort_key DESC",
+            "SELECT COUNT(*) FROM threads WHERE id = $1",
             row["id"],
         )
         row["id"] = int(row["id"].split("_")[1])

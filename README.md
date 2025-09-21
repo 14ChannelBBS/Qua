@@ -1,4 +1,4 @@
-# Qua
+# <ruby>Qua<rp>(</rp><rt>くあ</rt><rp>)</rp></ruby>
 
 14 はフランス語で Quatorze らしい
 

@@ -1,5 +1,8 @@
 const board = window.location.href.split("/")[3];
 
+/*
+  スレッド一覧のロードに使用する関数
+*/
 async function loadThreadList() {
   const threadListElement = document.querySelector(".thread-list");
 
