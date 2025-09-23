@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>認証ページ</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    />
+
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      async
+      defer
+    ></script>
+
+    <script src="/static/js/global.js"></script>
+    <script src="/static/js/verification.js"></script>
+    <script src="/static/js/auth.js"></script>
+  </head>
+  <body>
+    <div id="verification-modal" class="modal">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">Please cooperate to verification</p>
+          <button class="delete" aria-label="close"></button>
+        </header>
+        <section class="modal-card-body">
+          <span class="turnstile-message"></span>
+          <div class="turnstile-container"></div>
+        </section>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="container">
+        <h1 class="title">認証ページ</h1>
+        <p class="subtitle">
+          認証をしていない場合は、下のボタンを押してください。
+        </p>
+
+        <div class="notifications"></div>
+
+        <button class="button is-primary is-fullwidth verification">
+          認証する
+        </button>
+
+        <hr />
+        <p>
+          認証が完了した場合、または認証したがトークンを忘れた場合は、以下からコピーできます。
+        </p>
+        <p>
+          こちらを専ブラのメール欄、またはコマンド欄に貼り付けることで認証をパスすることができます。
+        </p>
+        <input type="text" class="input token" />
+
+        <hr />
+        <p class="has-text-right">14Channel on Qua {{ version }}</p>
+      </div>
+    </section>
+  </body>
+</html>

@@ -25,6 +25,13 @@ def upgrade() -> None:
         sa.Column("token", sa.VARCHAR, primary_key=True),
         sa.Column("id", sa.VARCHAR, unique=True),
         sa.Column("ips", sa.ARRAY(sa.VARCHAR), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+        ),
+        sa.Column("cap", sa.VARCHAR, nullable=True),
+        sa.Column("cap_color", sa.VARCHAR, nullable=True),
     )
 
 

@@ -7,6 +7,7 @@ from pydantic.alias_generators import to_snake
 
 class Thread(BaseModel):
     id: Union[str, int]
+    board: str
     title: str
     createdAt: datetime
     sortKey: int

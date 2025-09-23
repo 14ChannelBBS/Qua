@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel, ConfigDict, Json
 from pydantic.alias_generators import to_snake
@@ -13,7 +12,7 @@ class Response(BaseModel):
     shownId: str
     name: str
     content: str
-    reactions: List[str]
+    reactions: Json
     attributes: Json
 
     model_config = ConfigDict(alias_generator=to_snake)

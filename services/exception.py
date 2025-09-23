@@ -9,3 +9,20 @@ class ContentTooLong(Exception):
         super().__init__(*args)
         self.type = type
         self.max = max
+
+
+class ContentTooShort(Exception):
+    def __init__(self, type: str, min: int, *args):
+        super().__init__(*args)
+        self.type = type
+        self.min = min
+
+
+class PostThreadRateLimit(Exception):
+    def __init__(self, remain: int, *args):
+        super().__init__(*args)
+        self.remain = remain
+
+
+class PostResponseRateLimit(PostThreadRateLimit):
+    pass

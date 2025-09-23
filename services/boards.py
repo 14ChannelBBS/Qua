@@ -1,20 +1,33 @@
 import asyncio
-import html
 import math
 import os
+import re
+import secrets
 import time
-from typing import Dict, List
+from datetime import datetime
+from typing import Any, Dict, List
 
 import dotenv
 from pydantic import TypeAdapter
 
 from objects import Board, Response, Thread
 from services.db import DBService
-from services.exception import ContentTooLong, VerificationRequired
-from services.id import generateId
+from services.exception import (
+    ContentTooLong,
+    ContentTooShort,
+    PostResponseRateLimit,
+    PostThreadRateLimit,
+    VerificationRequired,
+)
+from services.id import generateId, tz
+from services.socketio import sio
 from services.trip import generateTrip
 
 dotenv.load_dotenv()
+
+boardTypeAdapter = TypeAdapter(List[Board])
+threadTypeAdapter = TypeAdapter(List[Thread])
+responseTypeAdapter = TypeAdapter(List[Response])
 
 
 async def createBoard(board: Board):
@@ -35,9 +48,12 @@ async def getBoard(id: str):
     return Board.model_validate(dict(row))
 
 
-async def getThreadsInBoard(id: str, page: int = 0):
-    typeAdapter = TypeAdapter(List[Thread])
+async def getBoards():
+    rows = [dict(row) for row in await DBService.pool.fetch("SELECT * FROM boards")]
+    return boardTypeAdapter.validate_python(rows)
 
+
+async def getThreadsInBoard(id: str, page: int = 0):
     rows = []
 
     PAGE_SIZE = 20
@@ -56,13 +72,14 @@ async def getThreadsInBoard(id: str, page: int = 0):
     ):
         row = dict(_row)
         row["count"] = await DBService.pool.fetchval(
-            "SELECT COUNT(*) FROM threads WHERE id = $1",
+            "SELECT COUNT(*) FROM responses WHERE parent_id = $1",
             row["id"],
         )
+        row["board"] = row["id"].split("_")[0]
         row["id"] = int(row["id"].split("_")[1])
         rows.append(row)
 
-    return typeAdapter.validate_python(rows)
+    return threadTypeAdapter.validate_python(rows)
 
 
 async def getThreadInBoard(boardId: str, id: int):
@@ -76,13 +93,12 @@ async def getThreadInBoard(boardId: str, id: int):
     row["count"] = await DBService.pool.fetchval(
         "SELECT COUNT(*) FROM responses WHERE parent_id = $1", row["id"]
     )
+    row["board"] = row["id"].split("_")[0]
     row["id"] = int(row["id"].split("_")[1])
     return Thread.model_validate(row)
 
 
 async def getResponsesInThread(boardId: str, id: str):
-    typeAdapter = TypeAdapter(List[Response])
-
     rows = []
 
     for _row in await DBService.pool.fetch(
@@ -92,7 +108,128 @@ async def getResponsesInThread(boardId: str, id: str):
         row = dict(_row)
         rows.append(row)
 
-    return typeAdapter.validate_python(rows)
+    return responseTypeAdapter.validate_python(rows)
+
+
+async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, Any]:
+    token = cookies.get("2ch_X")
+    if not token:
+        tokens = command.split("#", 1)
+        if len(tokens) <= 1:
+            raise VerificationRequired(os.getenv("turnstileSiteKey"))
+        token = tokens[1]
+
+    idRow = await DBService.pool.fetchrow("SELECT * FROM ids WHERE token = $1", token)
+    if not idRow:
+        raise VerificationRequired(os.getenv("turnstileSiteKey"))
+    return dict(idRow)
+
+
+def sanitize(input: str):
+    # 基本的なサニタイズ
+    input = (
+        input.replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .strip()
+        .strip(" ")
+        .strip("　")
+        .strip("\t")
+        .strip("\n")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("&#10;", "")
+    )
+    return input
+
+
+def sanitizeRefs(text: str) -> str:
+    result = []
+    i = 0
+    while i < len(text):
+        if text[i] == "&" and i + 1 < len(text) and text[i + 1] == "#":
+            j = i + 2
+            base = 10
+            if j < len(text) and text[j] in "xX":
+                base = 16
+                j += 1
+
+            while j < len(text) and (
+                text[j].isdigit() or (base == 16 and text[j] in "abcdefABCDEF")
+            ):
+                j += 1
+
+            if j < len(text) and text[j] == ";":
+                result.append(text[i : j + 1])
+                i = j + 1
+                continue
+            else:
+                i = j
+                continue
+        else:
+            result.append(text[i])
+            i += 1
+    return "".join(result)
+
+
+def sanitizeThreadName(name: str):
+    name = name.replace("\r\n", "").replace("\r", "").replace("\n", "")
+    name = re.sub(r"&#([Xx]0*[aA]|0*10);", "", name)
+    return sanitizeRefs(name)
+
+
+def sanitizeName(name: str):
+    name = (
+        sanitize(name)
+        .replace("\n", "")
+        .replace("◆", "◇")
+        .replace("&#9670;", "◇")
+        .replace("★", "☆")
+        .replace("&#9733;", "☆")
+    )
+    return name
+
+
+def formatName(name: str, anonName: str) -> str:
+    if name != "":
+        fields = name.rsplit("#", 1)
+        if len(fields) <= 1:
+            return sanitizeName(fields[0])
+        else:
+            name, tripKey = tuple(fields)
+
+            name = sanitizeName(name)
+            tripKey = generateTrip(f"#{tripKey}")
+            return f"{name}{tripKey}"
+    return sanitizeName(anonName)
+
+
+def formatContent(content: str) -> str:
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    return content
+
+
+def emojiToHTML(text: str) -> str:
+    result = []
+    for char in text:
+        if ord(char) > 0xFFFF:
+            result.append(f"&#{ord(char)};")
+        else:
+            result.append(char)
+    return "".join(result)
+
+
+async def updateIdIp(idRow: Dict[str, Any], ipAddress: str):
+    idRow["ips"].append(ipAddress)
+    await DBService.pool.execute(
+        "UPDATE ONLY ids SET ips = $1 WHERE token = $2",
+        list(set(idRow["ips"])),
+        idRow["token"],
+    )
+
+
+postThreadRateLimits: Dict[str, int] = {}
+postResponseRateLimits: Dict[str, int] = {}
 
 
 async def postThread(
@@ -107,28 +244,35 @@ async def postThread(
 ):
     board = await getBoard(boardId)
 
-    token = cookies.get("2ch_X")
-    if not token:
-        raise VerificationRequired(os.getenv("turnstileSiteKey"))
+    idRow = await getVerifiedUser(command, cookies)
 
-    idRow = await DBService.pool.fetchrow("SELECT * FROM ids WHERE token = $1", token)
-    if not idRow:
-        raise VerificationRequired(os.getenv("turnstileSiteKey"))
-    idRow = dict(idRow)
+    title = emojiToHTML(sanitizeThreadName(title))
+    content = emojiToHTML(sanitize(formatContent(content)))
+    name = emojiToHTML(formatName(name, board.anonName))
 
-    if len(title) > 100:
-        raise ContentTooLong("タイトル", 100)
-    if len(name) > 32:
-        raise ContentTooLong("名前", 32)
-    if len(content) > 500:
-        raise ContentTooLong("本文", 500)
+    if len(title) <= 0:
+        raise ContentTooShort("タイトル", 1)
+    if len(content) <= 0:
+        raise ContentTooShort("本文", 1)
+    if len(title) > 192:
+        raise ContentTooLong("タイトル", 192)
+    if len(name) > 128:
+        raise ContentTooLong("名前", 128)
+    if formatContent(content).count("\n") > 16:
+        raise ContentTooLong("本文の改行", 16)
+    if len(content) > 9192:
+        raise ContentTooLong("本文", 9192)
 
-    title = html.escape(title)
-    name = html.escape(generateTrip(name))
-    content = html.escape(content)
-
-    # 1日限りのIDを生成
     shownId = generateId(ipAddress)
+
+    if (
+        postThreadRateLimits.get(idRow["id"])
+        and postThreadRateLimits.get(idRow["id"], 0) < time.time() + 600
+    ):
+        raise PostThreadRateLimit(
+            time.time() + 600 - postThreadRateLimits.get(idRow["id"], 0)
+        )
+    postThreadRateLimits[idRow["id"]] = time.time()
 
     # キー被り対策
     while True:
@@ -142,11 +286,12 @@ async def postThread(
     row = await DBService.pool.fetchrow(
         """
             INSERT INTO threads
-            (id, title, sort_key, owner_id, owner_shown_id)
-            VALUES ($1, $2, $3, $4, $5)
+            (id, created_at, title, sort_key, owner_id, owner_shown_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *
         """,
         f"{board.id}_{key}",
+        datetime.now(tz),
         title,
         key,
         idRow["id"],
@@ -157,16 +302,126 @@ async def postThread(
     row["count"] = await DBService.pool.fetchval(
         "SELECT COUNT(*) FROM responses WHERE parent_id = $1", row["id"]
     )
+    row["board"] = row["id"].split("_")[0]
     row["id"] = int(row["id"].split("_")[1])
 
-    async def updateIdIp():
-        idRow["ips"].append(ipAddress)
-        await DBService.pool.execute(
-            "UPDATE ONLY ids SET ips = $1 WHERE token = $2",
-            list(set(idRow["ips"])),
-            idRow["token"],
+    await DBService.pool.execute(
+        """
+            INSERT INTO responses
+            (id, created_at, parent_id, author_id, shown_id, name, content)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """,
+        secrets.token_hex(6),
+        datetime.now(tz),
+        f"{board.id}_{key}",
+        idRow["id"],
+        shownId,
+        name,
+        content,
+    )
+    thread = Thread.model_validate(row)
+
+    async def notification():
+        await sio.emit(
+            "updateThreads",
+            threadTypeAdapter.dump_python(
+                await getThreadsInBoard(board.id), mode="json", by_alias=True
+            ),
+            {thread.board},
         )
 
-    asyncio.create_task(updateIdIp())
+    asyncio.create_task(updateIdIp(idRow, ipAddress))
+    asyncio.create_task(notification())
 
-    return Thread.model_validate(row)
+    return thread
+
+
+async def postResponse(
+    *,
+    boardId: str,
+    threadId: str,
+    name: str,
+    command: str,
+    content: str,
+    cookies: Dict[str, str],
+    ipAddress: str,
+):
+    board = await getBoard(boardId)
+    thread = await getThreadInBoard(board.id, threadId)
+
+    idRow = await getVerifiedUser(command, cookies)
+
+    content = sanitize(formatContent(content))
+    name = formatName(name, board.anonName)
+
+    if len(content) <= 0:
+        raise ContentTooShort("本文", 1)
+    if len(name) > 128:
+        raise ContentTooLong("名前", 128)
+    if formatContent(content).count("\n") > 16:
+        raise ContentTooLong("本文の改行", 16)
+    if len(content) > 9192:
+        raise ContentTooLong("本文", 9192)
+
+    shownId = generateId(ipAddress)
+
+    if (
+        postResponseRateLimits.get(idRow["id"])
+        and postResponseRateLimits.get(idRow["id"], 0) < time.time() + 600
+    ):
+        raise PostResponseRateLimit(
+            time.time() + 600 - postResponseRateLimits.get(idRow["id"], 0)
+        )
+    postResponseRateLimits[idRow["id"]] = time.time()
+
+    # キー被り対策
+    while True:
+        key = math.floor(time.time())
+        if not await DBService.pool.fetchrow(
+            "SELECT * FROM threads WHERE id = $1", f"{thread.board}_{key}"
+        ):
+            break
+        await asyncio.sleep(1)
+
+    row = await DBService.pool.fetchrow(
+        """
+            INSERT INTO responses
+            (id, created_at, parent_id, author_id, shown_id, name, content)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *
+        """,
+        secrets.token_hex(6),
+        datetime.now(tz),
+        f"{thread.board}_{thread.id}",
+        idRow["id"],
+        shownId,
+        name,
+        content,
+    )
+    response = Response.model_validate(dict(row))
+
+    await DBService.pool.execute(
+        "UPDATE ONLY threads SET sort_key = $1 WHERE id = $2",
+        time.time(),
+        f"{thread.board}_{thread.id}",
+    )
+
+    async def notification():
+        await sio.emit(
+            "newResponse",
+            response.model_dump(mode="json", by_alias=True),
+            f"{thread.board}_{thread.id}",
+        )
+
+        await sio.emit(
+            "updateThreads",
+            threadTypeAdapter.dump_python(
+                await getThreadsInBoard(board.id), mode="json", by_alias=True
+            ),
+            {thread.board},
+        )
+
+    asyncio.create_task(updateIdIp(idRow, ipAddress))
+    asyncio.create_task(notification())
+
+    return response

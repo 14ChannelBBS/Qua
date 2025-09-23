@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{board.name}} on 14Channel</title>
+    <title>{{board.name}}</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
@@ -17,10 +17,34 @@
     />
     <link rel="stylesheet" href="/static/css/global.css" />
     <link rel="stylesheet" href="/static/css/board.css" />
+
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      async
+      defer
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script src="/static/js/global.js"></script>
+    <script src="/static/js/verification.js"></script>
     <script src="/static/js/board.js"></script>
   </head>
   <body>
-    <div class="is-loading"><div class="loader"></div></div>
+    <div class="loadingPlzWait"><div class="loader"></div></div>
+
+    <div id="verification-modal" class="modal">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">Please cooperate to verification</p>
+          <button class="delete" aria-label="close"></button>
+        </header>
+        <section class="modal-card-body">
+          <span class="turnstile-message"></span>
+          <div class="turnstile-container"></div>
+        </section>
+      </div>
+    </div>
 
     <section class="section">
       <div class="container">
@@ -45,6 +69,9 @@
 
         <div class="box">
           <h2 class="title is-5">スレッドを作成</h2>
+
+          <div class="notifications"></div>
+
           <div class="form">
             <div class="field">
               <p class="control has-icons-left has-icons-right">

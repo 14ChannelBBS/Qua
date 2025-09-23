@@ -28,7 +28,6 @@ def upgrade() -> None:
             "created_at",
             sa.TIMESTAMP(timezone=True),
             nullable=False,
-            server_default="now()",
         ),
         sa.Column("author_id", sa.VARCHAR, nullable=False),
         sa.Column("shown_id", sa.VARCHAR, nullable=False),

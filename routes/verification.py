@@ -2,14 +2,16 @@ import os
 import secrets
 import string
 import uuid
+from datetime import datetime
 
 import dotenv
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from services.cf import isFromCloudflare
 from services.db import DBService
+from services.id import tz
 
 dotenv.load_dotenv()
 
@@ -27,7 +29,9 @@ def randomId(n: int) -> str:
 
 
 @router.post("/api/verification")
-async def verification(request: Request, model: VerificationRequest):
+async def verification(
+    request: Request, response: Response, model: VerificationRequest
+):
     ipAddress = (
         request.headers["CF-Connecting-IP"]
         if isFromCloudflare(request.client.host)
@@ -35,7 +39,7 @@ async def verification(request: Request, model: VerificationRequest):
     )
 
     async with httpx.AsyncClient() as http:
-        response = await http.post(
+        httpResponse = await http.post(
             "https://challenges.cloudflare.com/turnstile/v0/siteverify",
             json={
                 "secret": os.getenv("turnstileSecretKey"),
@@ -44,8 +48,8 @@ async def verification(request: Request, model: VerificationRequest):
                 "idempotency_key": str(uuid.uuid4()),
             },
         )
-        response.raise_for_status()
-        jsonData = response.json()
+        httpResponse.raise_for_status()
+        jsonData = httpResponse.json()
 
     if not jsonData["success"]:
         raise HTTPException(
@@ -54,12 +58,14 @@ async def verification(request: Request, model: VerificationRequest):
 
     token = secrets.token_hex(16)
     await DBService.pool.execute(
-        "INSERT INTO ids (token, id, ips) VALUES ($1, $2, $3)",
+        "INSERT INTO ids (token, id, ips, created_at) VALUES ($1, $2, $3, $4)",
         token,
         randomId(8),
         [ipAddress],
+        datetime.now(tz),
     )
 
+    response.set_cookie("2ch_X", token, max_age=31536000)
     return {
         "detail": "VERIFICATION_SUCCESSFUL",
         "message": "認証が完了しました。",

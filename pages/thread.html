@@ -17,10 +17,29 @@
     />
     <link rel="stylesheet" href="/static/css/global.css" />
     <link rel="stylesheet" href="/static/css/thread.css" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script src="/static/js/global.js"></script>
+    <script src="/static/js/verification.js"></script>
     <script src="/static/js/thread.js"></script>
   </head>
   <body>
-    <div class="is-loading"><div class="loader"></div></div>
+    <div class="loadingPlzWait"><div class="loader"></div></div>
+
+    <div id="verification-modal" class="modal">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">Please cooperate to verification</p>
+          <button class="delete" aria-label="close"></button>
+        </header>
+        <section class="modal-card-body">
+          <span class="turnstile-message"></span>
+          <div class="turnstile-container"></div>
+        </section>
+      </div>
+    </div>
 
     <section class="section">
       <div class="container">
@@ -32,16 +51,18 @@
         </div>
         <hr />
 
-        <div class="box thread-info">
+        <div class="box thread-title">
           <h1 class="title is-3">{{thread.title}}</h1>
-
-          <div class="responses">Loading...</div>
         </div>
+        <div class="box thread-info responses">Loading...</div>
 
         <hr />
 
         <div class="box">
           <h2 class="title is-5">スレッドに投稿</h2>
+
+          <div class="notifications"></div>
+
           <div class="form">
             <div class="field">
               <p class="control has-icons-left has-icons-right">

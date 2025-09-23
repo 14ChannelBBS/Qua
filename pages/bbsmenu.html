@@ -1,0 +1,16 @@
+
+<HTML>
+<HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+<TITLE>BBS MENU for Qua</TITLE>
+<base target="_blank">
+</HEAD>
+<BODY TEXT="#CC3300" BGCOLOR="#FFFFFF" link="#0000FF" alink="#ff0000" vlink="#660099">
+<font size="2">
+<A HREF={{ request.url.scheme }}://{{ request.url.hostname }}/wiq>Quaってなぁに？</A>
+<BR><BR><B>Qua</B><BR>{% for board in boards %}
+ <A HREF={{ request.url.scheme }}://{{ request.url.hostname }}/{{ board.id }}/>{{ board.name }}</A><BR>
+{% endfor %}<BR><BR>更新日 2025/09/23
+</font>
+</BODY>
+</HTML>

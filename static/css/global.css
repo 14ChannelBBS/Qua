@@ -1,4 +1,4 @@
-.is-loading {
+.loadingPlzWait {
   position: fixed;
   right: 10px;
   top: 10px;
@@ -6,4 +6,8 @@
 
 .post {
   margin-top: 15px;
+}
+
+.notifications {
+  margin-bottom: 15px;
 }

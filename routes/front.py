@@ -6,13 +6,20 @@ from services.boards import getBoard, getThreadInBoard
 router = APIRouter()
 templates = Jinja2Templates("pages")
 
-version = "v2025.09.21"
+version = "v2025.09.23"
 
 
 @router.get("/", include_in_schema=False)
 def index(request: Request):
     return templates.TemplateResponse(
         request, "index.html", {"request": request, "version": version}
+    )
+
+
+@router.get("/auth", include_in_schema=False)
+def authPage(request: Request):
+    return templates.TemplateResponse(
+        request, "auth.html", {"request": request, "version": version}
     )
 
 
