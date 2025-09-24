@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Union
+from typing import Dict, Union
 
-from pydantic import BaseModel, ConfigDict, Json
+from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_snake
 
 
@@ -14,6 +14,6 @@ class Thread(BaseModel):
     ownerId: str
     ownerShownId: str
     count: int
-    attributes: Json
+    attributes: Dict[str, str]
 
     model_config = ConfigDict(alias_generator=to_snake)

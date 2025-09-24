@@ -8,9 +8,10 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import dotenv
+import emoji
 from pydantic import TypeAdapter
 
-from objects import Board, Response, Thread
+from objects import Board, Reaction, Response, Thread
 from services.db import DBService
 from services.exception import (
     ContentTooLong,
@@ -28,6 +29,7 @@ dotenv.load_dotenv()
 boardTypeAdapter = TypeAdapter(List[Board])
 threadTypeAdapter = TypeAdapter(List[Thread])
 responseTypeAdapter = TypeAdapter(List[Response])
+reactionTypeAdapter = TypeAdapter(List[Reaction])
 
 
 async def createBoard(board: Board):
@@ -128,7 +130,10 @@ async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, An
 def sanitize(input: str):
     # 基本的なサニタイズ
     input = (
-        input.replace("\r\n", "\n")
+        emoji.emojize(
+            input, delimiters=("::", "::"), language="alias", variant="emoji_type"
+        )
+        .replace("\r\n", "\n")
         .replace("\r", "\n")
         .strip()
         .strip(" ")
@@ -228,10 +233,6 @@ async def updateIdIp(idRow: Dict[str, Any], ipAddress: str):
     )
 
 
-postThreadRateLimits: Dict[str, int] = {}
-postResponseRateLimits: Dict[str, int] = {}
-
-
 async def postThread(
     *,
     boardId: str,
@@ -250,6 +251,12 @@ async def postThread(
     content = emojiToHTML(sanitize(formatContent(content)))
     name = emojiToHTML(formatName(name, board.anonName))
 
+    attributes = {}
+    # キャップ
+    if idRow["cap"]:
+        attributes["cap"] = idRow["cap"]
+        attributes["cap_color"] = idRow["cap_color"]
+
     if len(title) <= 0:
         raise ContentTooShort("タイトル", 1)
     if len(content) <= 0:
@@ -265,14 +272,12 @@ async def postThread(
 
     shownId = generateId(ipAddress)
 
-    if (
-        postThreadRateLimits.get(idRow["id"])
-        and postThreadRateLimits.get(idRow["id"], 0) < time.time() + 600
-    ):
-        raise PostThreadRateLimit(
-            time.time() + 600 - postThreadRateLimits.get(idRow["id"], 0)
-        )
-    postThreadRateLimits[idRow["id"]] = time.time()
+    ratelimit = await DBService.redis.get(f"postThreadRateLimits_{idRow['id']}")
+    if ratelimit and float(ratelimit) > time.time():
+        raise PostThreadRateLimit(float(ratelimit) - time.time())
+    await DBService.redis.set(
+        f"postThreadRateLimits_{idRow['id']}", time.time() + 600, ex=60 * 60 * 24
+    )
 
     # キー被り対策
     while True:
@@ -308,8 +313,8 @@ async def postThread(
     await DBService.pool.execute(
         """
             INSERT INTO responses
-            (id, created_at, parent_id, author_id, shown_id, name, content)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (id, created_at, parent_id, author_id, shown_id, name, content, attributes, reactions)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """,
         secrets.token_hex(6),
         datetime.now(tz),
@@ -318,6 +323,7 @@ async def postThread(
         shownId,
         name,
         content,
+        attributes,
     )
     thread = Thread.model_validate(row)
 
@@ -327,7 +333,7 @@ async def postThread(
             threadTypeAdapter.dump_python(
                 await getThreadsInBoard(board.id), mode="json", by_alias=True
             ),
-            {thread.board},
+            thread.board,
         )
 
     asyncio.create_task(updateIdIp(idRow, ipAddress))
@@ -351,8 +357,14 @@ async def postResponse(
 
     idRow = await getVerifiedUser(command, cookies)
 
-    content = sanitize(formatContent(content))
-    name = formatName(name, board.anonName)
+    content = emojiToHTML(sanitize(formatContent(content)))
+    name = emojiToHTML(formatName(name, board.anonName))
+
+    attributes = {}
+    # キャップ
+    if idRow["cap"]:
+        attributes["cap"] = idRow["cap"]
+        attributes["cap_color"] = idRow["cap_color"]
 
     if len(content) <= 0:
         raise ContentTooShort("本文", 1)
@@ -365,14 +377,12 @@ async def postResponse(
 
     shownId = generateId(ipAddress)
 
-    if (
-        postResponseRateLimits.get(idRow["id"])
-        and postResponseRateLimits.get(idRow["id"], 0) < time.time() + 600
-    ):
-        raise PostResponseRateLimit(
-            time.time() + 600 - postResponseRateLimits.get(idRow["id"], 0)
-        )
-    postResponseRateLimits[idRow["id"]] = time.time()
+    ratelimit = await DBService.redis.get(f"postResponseRateLimits_{idRow['id']}")
+    if ratelimit and float(ratelimit) > time.time():
+        raise PostResponseRateLimit(float(ratelimit) - time.time())
+    await DBService.redis.set(
+        f"postResponseRateLimits_{idRow['id']}", time.time() + 5, ex=60 * 60 * 24
+    )
 
     # キー被り対策
     while True:
@@ -386,8 +396,8 @@ async def postResponse(
     row = await DBService.pool.fetchrow(
         """
             INSERT INTO responses
-            (id, created_at, parent_id, author_id, shown_id, name, content)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (id, created_at, parent_id, author_id, shown_id, name, content, attributes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         """,
         secrets.token_hex(6),
@@ -397,6 +407,7 @@ async def postResponse(
         shownId,
         name,
         content,
+        attributes,
     )
     response = Response.model_validate(dict(row))
 
@@ -418,7 +429,7 @@ async def postResponse(
             threadTypeAdapter.dump_python(
                 await getThreadsInBoard(board.id), mode="json", by_alias=True
             ),
-            {thread.board},
+            thread.board,
         )
 
     asyncio.create_task(updateIdIp(idRow, ipAddress))

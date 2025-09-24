@@ -1,4 +1,5 @@
 import traceback
+import urllib.parse
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -187,12 +188,20 @@ async def apiPostResponse(
         )
         if model.name != "":
             response.set_cookie(
-                "NAME", model.name, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "NAME",
+                urllib.parse.quote(model.name),
+                max_age=60 * 60 * 60 * 24 * 365 * 10,
             )
+        else:
+            response.delete_cookie("NAME")
         if model.command != "":
             response.set_cookie(
-                "MAIL", model.command, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "MAIL",
+                urllib.parse.quote(model.command),
+                max_age=60 * 60 * 60 * 24 * 365 * 10,
             )
+        else:
+            response.delete_cookie("MAIL")
 
         return responseObject
     except VerificationRequired as e:

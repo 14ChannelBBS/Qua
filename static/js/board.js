@@ -90,9 +90,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadThreadList();
 
   const name = getCookie("NAME");
-  if (name !== undefined) document.querySelector(".form-name").value = name;
+  if (name !== undefined)
+    document.querySelector(".form-name").value = decodeURI(name);
   const mail = getCookie("MAIL");
-  if (mail !== undefined) document.querySelector(".form-command").value = mail;
+  if (mail !== undefined)
+    document.querySelector(".form-command").value = decodeURI(mail);
 
   const postButton = document.querySelector(".post");
   postButton.addEventListener("click", async () => {
@@ -111,6 +113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   sio.on("updateThreads", (threads) => {
     if (threads[0].board == board) {
       appendThread(jsonData.threads, threadListElement);
+      playNotificationSound();
     }
   });
 

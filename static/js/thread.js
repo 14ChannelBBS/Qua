@@ -43,11 +43,13 @@ async function appendResponse(response, i, responsesElement) {
 
   const responseDetailElement = document.createElement("span");
   responseDetailElement.classList.add("detail");
-  responseDetailElement.innerHTML = `${
-    i + 1
-  } : <span style="color: green;"><b>${response.name}</b></span> : ${new Date(
-    response.created_at
-  ).toLocaleString()} ID: ${response.shown_id}`;
+  responseDetailElement.innerHTML = `${i + 1} : <span style="color: ${
+    response.attributes.cap_color ?? "green"
+  };"><b>${response.name}@${
+    response.attributes.cap ? response.attributes.cap + " ★" : ""
+  }</b></span> : ${new Date(response.created_at).toLocaleString()} ID: ${
+    response.shown_id
+  }`;
   element.append(responseDetailElement);
 
   const responseContentElement = document.createElement("p");
@@ -122,9 +124,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadResponses();
 
   const name = getCookie("NAME");
-  if (name !== undefined) document.querySelector(".form-name").value = name;
+  if (name !== undefined)
+    document.querySelector(".form-name").value = decodeURI(name);
   const mail = getCookie("MAIL");
-  if (mail !== undefined) document.querySelector(".form-command").value = mail;
+  if (mail !== undefined)
+    document.querySelector(".form-command").value = decodeURI(mail);
 
   const postButton = document.querySelector(".post");
   postButton.addEventListener("click", async () => {
@@ -150,6 +154,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (isAtBottom) {
       threadInfoElement.scrollTop = threadInfoElement.scrollHeight;
     }
+
+    playNotificationSound();
   });
 
   loadingElement.style.display = "none";

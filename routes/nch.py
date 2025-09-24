@@ -1,4 +1,4 @@
-from urllib.parse import parse_qs, unquote_plus
+from urllib.parse import parse_qs, quote, unquote_plus
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -59,7 +59,7 @@ async def board(boardId: str):
             f"{board.id}@Qua\n"
             + "\n".join([f"{key}={value}" for key, value in setting.items()])
         ).encode("shift_jis"),
-        media_type="text/html; charset=shift_jis",
+        media_type="text/plain; charset=shift_jis",
     )
 
 
@@ -88,7 +88,7 @@ async def threads(boardId: str):
                 ]
             )
         ).encode("shift-jis"),
-        media_type="text/html; charset=shift_jis",
+        media_type="text/plain; charset=shift_jis",
     )
 
 
@@ -104,16 +104,23 @@ async def responses(boardId: str, threadId: int):
     for response in responses:
         del response.authorId
 
+    name = response.name
+    if response.attributes.get("cap"):
+        name += "@" + response.attributes.get("cap") + " ★"
+
+        if response.attributes.get("cap_color"):
+            name = f'<font color="{response.attributes.get("cap_color")}">{name}</font>'
+
     return PlainTextResponse(
         (
             "\n".join(
                 [
-                    f"{response.name}<>{response.attributes.get('email', '')}<>{response.createdAt.strftime('%Y/%m/%d %H:%M:%S.%f')} ID:{response.shownId}<> {response.content.replace('\n', ' <br> ')} <>"
+                    f"{name}<>{response.attributes.get('email', '')}<>{response.createdAt.strftime('%Y/%m/%d %H:%M:%S.%f')} ID:{response.shownId}<> {response.content.replace('\n', ' <br> ')} <>"
                     for response in responses
                 ]
             )
         ).encode("shift-jis"),
-        media_type="text/html; charset=shift_jis",
+        media_type="text/plain; charset=shift_jis",
     )
 
 
@@ -209,12 +216,16 @@ async def bbscgi(request: Request):
         )
         if FROM != "":
             templateResponse.set_cookie(
-                "NAME", FROM, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "NAME", quote(FROM), max_age=60 * 60 * 60 * 24 * 365 * 10
             )
+        else:
+            response.delete_cookie("NAME")
         if mail != "":
             templateResponse.set_cookie(
-                "MAIL", mail, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "MAIL", quote(mail), max_age=60 * 60 * 60 * 24 * 365 * 10
             )
+        else:
+            response.delete_cookie("MAIL")
 
         return templateResponse
     except VerificationRequired:

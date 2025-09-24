@@ -11,6 +11,7 @@ function verificationPrompt(siteKey, message, callback) {
   const target = document.getElementById(modal);
 
   document.querySelector(".turnstile-message").textContent = message;
+  document.querySelector(".turnstile-container").innerHTML = "";
 
   const widgetId = turnstile.render(".turnstile-container", {
     sitekey: siteKey,

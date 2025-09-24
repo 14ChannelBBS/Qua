@@ -6,7 +6,7 @@ from services.boards import getBoard, getThreadInBoard
 router = APIRouter()
 templates = Jinja2Templates("pages")
 
-version = "v2025.09.23"
+version = "v2025.09.24"
 
 
 @router.get("/", include_in_schema=False)
