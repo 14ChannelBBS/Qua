@@ -13,8 +13,8 @@ from services.boards import (
     postThread,
 )
 from services.cf import isFromCloudflare
-from services.db import DBService
 from services.exception import (
+    BackendError,
     ContentTooLong,
     ContentTooShort,
     PostResponseRateLimit,
@@ -86,7 +86,7 @@ async def apiPostThread(
 
     try:
         response.status_code = 201
-        thread = await postThread(
+        thread, idRow = await postThread(
             boardId=boardId,
             title=model.title,
             name=model.name,
@@ -98,19 +98,21 @@ async def apiPostThread(
 
         response.set_cookie(
             "2ch_X",
-            await DBService.pool.fetchval(
-                "SELECT token FROM ids WHERE id = $1", thread.ownerId
-            ),
+            idRow["token"],
             max_age=60 * 60 * 60 * 24 * 365 * 10,
         )
 
         if model.name != "":
             response.set_cookie(
-                "NAME", model.name, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "NAME",
+                urllib.parse.quote(model.name),
+                max_age=60 * 60 * 60 * 24 * 365 * 10,
             )
         if model.command != "":
             response.set_cookie(
-                "MAIL", model.command, max_age=60 * 60 * 60 * 24 * 365 * 10
+                "MAIL",
+                urllib.parse.quote(model.command),
+                max_age=60 * 60 * 60 * 24 * 365 * 10,
             )
 
         return thread
@@ -141,6 +143,12 @@ async def apiPostThread(
             "detail": "OTITUITE",
             "message": f"落ち着いて投稿してください。投稿可能になるまで残り{e.remain}秒です。",
         }
+    except BackendError as e:
+        response.status_code = 500
+        return {
+            "detail": e.detail,
+            "message": e.message,
+        }
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, detail=str(e))
@@ -169,7 +177,7 @@ async def apiPostResponse(
 
     try:
         response.status_code = 201
-        responseObject = await postResponse(
+        responseObject, idRow = await postResponse(
             boardId=boardId,
             threadId=threadId,
             name=model.name,
@@ -181,9 +189,7 @@ async def apiPostResponse(
 
         response.set_cookie(
             "2ch_X",
-            await DBService.pool.fetchval(
-                "SELECT token FROM ids WHERE id = $1", responseObject.authorId
-            ),
+            idRow["token"],
             max_age=60 * 60 * 60 * 24 * 365 * 10,
         )
         if model.name != "":
@@ -230,6 +236,12 @@ async def apiPostResponse(
         return {
             "detail": "OTITUITE",
             "message": f"落ち着いて投稿してください。投稿可能になるまで残り{e.remain}秒です。",
+        }
+    except BackendError as e:
+        response.status_code = 500
+        return {
+            "detail": e.detail,
+            "message": e.message,
         }
     except Exception as e:
         traceback.print_exc()

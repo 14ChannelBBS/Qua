@@ -26,3 +26,10 @@ class PostThreadRateLimit(Exception):
 
 class PostResponseRateLimit(PostThreadRateLimit):
     pass
+
+
+class BackendError(Exception):
+    def __init__(self, detail: str, message: str = None, *args):
+        super().__init__(*args)
+        self.detail = detail
+        self.message = message

@@ -45,8 +45,8 @@ async function appendResponse(response, i, responsesElement) {
   responseDetailElement.classList.add("detail");
   responseDetailElement.innerHTML = `${i + 1} : <span style="color: ${
     response.attributes.cap_color ?? "green"
-  };"><b>${response.name}@${
-    response.attributes.cap ? response.attributes.cap + " ★" : ""
+  };"><b>${emojiParse(response.name)}@${
+    response.attributes.cap ? emojiParse(response.attributes.cap) + " ★" : ""
   }</b></span> : ${new Date(response.created_at).toLocaleString()} ID: ${
     response.shown_id
   }`;
@@ -54,7 +54,9 @@ async function appendResponse(response, i, responsesElement) {
 
   const responseContentElement = document.createElement("p");
   responseContentElement.classList.add("content");
-  responseContentElement.innerHTML = decoration(response.content);
+  responseContentElement.innerHTML = emojiParse(decoration(response.content));
+  console.log(decoration(response.content));
+  console.log(emojiParse(decoration(response.content)));
   element.append(responseContentElement);
 
   responsesElement.append(element);

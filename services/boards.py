@@ -14,6 +14,7 @@ from pydantic import TypeAdapter
 from objects import Board, Reaction, Response, Thread
 from services.db import DBService
 from services.exception import (
+    BackendError,
     ContentTooLong,
     ContentTooShort,
     PostResponseRateLimit,
@@ -214,6 +215,7 @@ def formatContent(content: str) -> str:
     return content
 
 
+# ここらへん直さないとだめな気がする
 def emojiToHTML(text: str) -> str:
     result = []
     for char in text:
@@ -309,11 +311,12 @@ async def postThread(
     )
     row["board"] = row["id"].split("_")[0]
     row["id"] = int(row["id"].split("_")[1])
+    thread = Thread.model_validate(row)
 
     await DBService.pool.execute(
         """
             INSERT INTO responses
-            (id, created_at, parent_id, author_id, shown_id, name, content, attributes, reactions)
+            (id, created_at, parent_id, author_id, shown_id, name, content, attributes)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """,
         secrets.token_hex(6),
@@ -325,7 +328,6 @@ async def postThread(
         content,
         attributes,
     )
-    thread = Thread.model_validate(row)
 
     async def notification():
         await sio.emit(
@@ -339,7 +341,12 @@ async def postThread(
     asyncio.create_task(updateIdIp(idRow, ipAddress))
     asyncio.create_task(notification())
 
-    return thread
+    return thread, idRow
+
+
+def addReaction(*, emojiChar: str, resNum: int):
+    if emojiChar not in emoji.EMOJI_DATA:
+        raise BackendError("EMOJI_NOT_FOUND", "絵文字が存在しません")
 
 
 async def postResponse(
@@ -435,4 +442,4 @@ async def postResponse(
     asyncio.create_task(updateIdIp(idRow, ipAddress))
     asyncio.create_task(notification())
 
-    return response
+    return response, idRow

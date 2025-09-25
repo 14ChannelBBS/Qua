@@ -14,7 +14,9 @@ function appendThread(threads, threadListElement) {
     element.title = `Owner ID: ${thread.owner_shown_id}`;
 
     const threadTitleElement = document.createElement("p");
-    threadTitleElement.textContent = `${thread.title} (${thread.count})`;
+    threadTitleElement.innerHTML = `${emojiParse(thread.title)} (${
+      thread.count
+    })`;
     threadTitleElement.style.fontWeight = "bold";
     element.append(threadTitleElement);
 

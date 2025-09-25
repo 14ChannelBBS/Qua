@@ -16,6 +16,7 @@ from services.boards import (
 from services.cf import isFromCloudflare
 from services.db import DBService
 from services.exception import (
+    BackendError,
     ContentTooLong,
     ContentTooShort,
     PostResponseRateLimit,
@@ -170,7 +171,7 @@ async def bbscgi(request: Request):
 
     try:
         if key:
-            response = await postResponse(
+            response, idRow = await postResponse(
                 boardId=bbs,
                 threadId=key,
                 name=FROM,
@@ -182,9 +183,12 @@ async def bbscgi(request: Request):
             fields = response.parentId.rsplit("_", 1)
             board = fields[0]
             threadId = fields[1]
-            internalId = response.authorId
+            resNum = await DBService.pool.fetchval(
+                "SELECT COUNT(*) FROM responses WHERE parent_id = $1",
+                response.parentId,
+            )
         else:
-            thread = await postThread(
+            thread, idRow = await postThread(
                 boardId=bbs,
                 title=subject,
                 name=FROM,
@@ -195,7 +199,7 @@ async def bbscgi(request: Request):
             )
             board = thread.board
             threadId = thread.id
-            internalId = thread.ownerId
+            resNum = thread.count
 
         templateResponse = templates.TemplateResponse(
             request=request,
@@ -209,9 +213,7 @@ async def bbscgi(request: Request):
 
         templateResponse.set_cookie(
             "2ch_X",
-            await DBService.pool.fetchval(
-                "SELECT token FROM ids WHERE id = $1", internalId
-            ),
+            idRow["token"],
             max_age=60 * 60 * 60 * 24 * 365 * 10,
         )
         if FROM != "":
@@ -219,13 +221,15 @@ async def bbscgi(request: Request):
                 "NAME", quote(FROM), max_age=60 * 60 * 60 * 24 * 365 * 10
             )
         else:
-            response.delete_cookie("NAME")
+            templateResponse.delete_cookie("NAME")
         if mail != "":
             templateResponse.set_cookie(
                 "MAIL", quote(mail), max_age=60 * 60 * 60 * 24 * 365 * 10
             )
         else:
-            response.delete_cookie("MAIL")
+            templateResponse.delete_cookie("MAIL")
+
+        templateResponse.headers.update({"X-ResNum": str(resNum)})
 
         return templateResponse
     except VerificationRequired:
@@ -314,6 +318,22 @@ async def bbscgi(request: Request):
             name="bbscgi_error.html",
             context={
                 "message": f"落ち着いて投稿してください。投稿可能になるまで残り{e.remain}秒です。",
+                "ipaddr": ipAddress,
+                "bbs": bbs,
+                "key": key,
+                "FROM": FROM,
+                "mail": mail,
+                "MESSAGE": MESSAGE,
+                "version": version,
+            },
+            headers={"content-type": "text/html; charset=shift_jis"},
+        )
+    except BackendError as e:
+        return templates.TemplateResponse(
+            request=request,
+            name="bbscgi_error.html",
+            context={
+                "message": e.message or e.detail,
                 "ipaddr": ipAddress,
                 "bbs": bbs,
                 "key": key,
