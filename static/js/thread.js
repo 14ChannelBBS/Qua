@@ -39,14 +39,16 @@ function decoration(content) {
 */
 async function appendResponse(response, i, responsesElement) {
   const element = document.createElement("div");
-  element.classList.add("response");
+  element.className = `response res-${i} res-${response.id}`;
 
   const responseDetailElement = document.createElement("span");
   responseDetailElement.classList.add("detail");
   responseDetailElement.innerHTML = `${i + 1} : <span style="color: ${
     response.attributes.cap_color ?? "green"
-  };"><b>${emojiParse(response.name)}@${
-    response.attributes.cap ? emojiParse(response.attributes.cap) + " ★" : ""
+  };"><b>${emojiParse(response.name)}${
+    response.attributes.cap
+      ? "@" + emojiParse(response.attributes.cap) + " ★"
+      : ""
   }</b></span> : ${new Date(response.created_at).toLocaleString()} ID: ${
     response.shown_id
   }`;
@@ -55,9 +57,27 @@ async function appendResponse(response, i, responsesElement) {
   const responseContentElement = document.createElement("p");
   responseContentElement.classList.add("content");
   responseContentElement.innerHTML = emojiParse(decoration(response.content));
-  console.log(decoration(response.content));
-  console.log(emojiParse(decoration(response.content)));
   element.append(responseContentElement);
+
+  const responseEmojisElement = document.createElement("div");
+  responseEmojisElement.classList.add("reactions");
+
+  response.reactions.forEach((reaction) => {
+    const reactionElement = document.createElement("div");
+    reactionElement.classList.add("reaction");
+
+    const reactionEmojiElement = document.createElement("div");
+    reactionEmojiElement.innerHTML = emojiParse(reaction.emoji.name);
+
+    const reactionCountElement = document.createElement("div");
+    reactionCountElement.textContent = reaction.count;
+
+    reactionElement.append(reactionEmojiElement);
+    reactionElement.append(reactionCountElement);
+
+    responseEmojisElement.append(reactionElement);
+  });
+  element.append(responseEmojisElement);
 
   responsesElement.append(element);
 }
@@ -150,12 +170,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     const isAtBottom =
       threadInfoElement.scrollTop >= threadInfoElement.scrollHeight - 500;
 
-    appendResponse(response, threadCount, responsesElement);
-    threadCount += 1;
+    if (response.response !== null) {
+      appendResponse(response.response, threadCount, responsesElement);
+      threadCount += 1;
 
-    if (isAtBottom) {
-      threadInfoElement.scrollTop = threadInfoElement.scrollHeight;
+      if (isAtBottom) {
+        threadInfoElement.scrollTop = threadInfoElement.scrollHeight;
+      }
     }
+
+    response.updatedResponses.forEach((response) => {
+      const responseEmojisElement = document.querySelector(
+        `.res-${response.id} > .reactions`
+      );
+      responseEmojisElement.innerHTML = "";
+
+      response.reactions.forEach((reaction) => {
+        const reactionElement = document.createElement("div");
+        reactionElement.classList.add("reaction");
+
+        const reactionEmojiElement = document.createElement("div");
+        reactionEmojiElement.innerHTML = emojiParse(reaction.emoji.name);
+
+        const reactionCountElement = document.createElement("div");
+        reactionCountElement.textContent = reaction.count;
+
+        reactionElement.append(reactionEmojiElement);
+        reactionElement.append(reactionCountElement);
+
+        responseEmojisElement.append(reactionElement);
+      });
+    });
 
     playNotificationSound();
   });

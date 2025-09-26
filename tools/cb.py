@@ -14,6 +14,7 @@ async def main():
             name=input("板の名前: "),
             description=input("板の説明: "),
             anon_name=input("名無し名: "),
+            attributes={},
         )
     )
 

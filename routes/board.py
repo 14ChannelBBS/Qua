@@ -17,8 +17,7 @@ from services.exception import (
     BackendError,
     ContentTooLong,
     ContentTooShort,
-    PostResponseRateLimit,
-    PostThreadRateLimit,
+    PostRateLimit,
     VerificationRequired,
 )
 
@@ -62,6 +61,10 @@ async def responses(boardId: str, threadId: int):
 
     for response in responses:
         del response.authorId
+
+        for reaction in response.reactions:
+            reaction.count = len(reaction.userIds)
+            del reaction.userIds
 
     return responses
 
@@ -137,7 +140,7 @@ async def apiPostThread(
             "detail": "CONTENT_TOO_SHORT",
             "message": f"{e.type}が短すぎます。{e.min}文字以上にしてください。",
         }
-    except PostThreadRateLimit as e:
+    except PostRateLimit as e:
         response.status_code = 429
         return {
             "detail": "OTITUITE",
@@ -209,7 +212,7 @@ async def apiPostResponse(
         else:
             response.delete_cookie("MAIL")
 
-        return responseObject
+        return responseObject if responseObject else {"detail": "POSTED_BUT_NO_CONTENT"}
     except VerificationRequired as e:
         response.status_code = 401
         return {
@@ -231,7 +234,7 @@ async def apiPostResponse(
             "detail": "CONTENT_TOO_SHORT",
             "message": f"{e.type}が短すぎます。{e.min}文字以上にしてください。",
         }
-    except PostResponseRateLimit as e:
+    except PostRateLimit as e:
         response.status_code = 429
         return {
             "detail": "OTITUITE",

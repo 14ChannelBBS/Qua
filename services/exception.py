@@ -18,14 +18,10 @@ class ContentTooShort(Exception):
         self.min = min
 
 
-class PostThreadRateLimit(Exception):
+class PostRateLimit(Exception):
     def __init__(self, remain: int, *args):
         super().__init__(*args)
         self.remain = remain
-
-
-class PostResponseRateLimit(PostThreadRateLimit):
-    pass
 
 
 class BackendError(Exception):

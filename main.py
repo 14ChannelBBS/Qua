@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import socketio
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from services.db import DBService
@@ -23,6 +24,7 @@ fastAPI = FastAPI(
     description="A document of qua (14channel backend system)",
 )
 fastAPI.mount("/static", StaticFiles(directory="static"), "static")
+fastAPI.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 moduleList = glob.glob("routes/*.py")

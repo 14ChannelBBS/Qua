@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{thread.title}}</title>
+    <title>{{thread.title | safe}}</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
@@ -57,12 +57,12 @@
           <a class="button is-ghost" href="/{{board.id}}">
             <i class="fa fa-arrow-left" aria-hidden="true"></i>
           </a>
-          <span class="title is-4">{{board.name}}</span>
+          <span class="title is-4">{{board.name | safe}}</span>
         </div>
         <hr />
 
         <div class="box thread-title">
-          <h1 class="title is-3">{{thread.title}}</h1>
+          <h1 class="title is-3">{{thread.title | safe}}</h1>
         </div>
         <div class="box thread-info responses">Loading...</div>
 

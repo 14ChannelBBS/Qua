@@ -1,4 +1,6 @@
 import asyncio
+import copy
+import html
 import math
 import os
 import re
@@ -11,14 +13,13 @@ import dotenv
 import emoji
 from pydantic import TypeAdapter
 
-from objects import Board, Reaction, Response, Thread
+from objects import Board, Emoji, Reaction, Response, Thread
 from services.db import DBService
 from services.exception import (
     BackendError,
     ContentTooLong,
     ContentTooShort,
-    PostResponseRateLimit,
-    PostThreadRateLimit,
+    PostRateLimit,
     VerificationRequired,
 )
 from services.id import generateId, tz
@@ -114,6 +115,28 @@ async def getResponsesInThread(boardId: str, id: str):
     return responseTypeAdapter.validate_python(rows)
 
 
+async def updateResponse(response: Response):
+    response = copy.deepcopy(response)
+    for reaction in response.reactions:
+        del reaction.count
+
+    await DBService.pool.execute(
+        """
+            UPDATE ONLY responses
+            SET name = $2,
+            content = $3,
+            reactions = $4,
+            attributes = $5
+            WHERE id = $1
+        """,
+        response.id,
+        response.name,
+        response.content,
+        reactionTypeAdapter.dump_python(response.reactions, mode="json", by_alias=True),
+        response.attributes,
+    )
+
+
 async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, Any]:
     token = cookies.get("2ch_X")
     if not token:
@@ -131,8 +154,10 @@ async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, An
 def sanitize(input: str):
     # 基本的なサニタイズ
     input = (
-        emoji.emojize(
-            input, delimiters=("::", "::"), language="alias", variant="emoji_type"
+        html.escape(
+            emoji.emojize(
+                input, delimiters=("::", "::"), language="alias", variant="emoji_type"
+            )
         )
         .replace("\r\n", "\n")
         .replace("\r", "\n")
@@ -141,10 +166,6 @@ def sanitize(input: str):
         .strip("　")
         .strip("\t")
         .strip("\n")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("&#10;", "")
     )
     return input
 
@@ -179,7 +200,7 @@ def sanitizeRefs(text: str) -> str:
 
 
 def sanitizeThreadName(name: str):
-    name = name.replace("\r\n", "").replace("\r", "").replace("\n", "")
+    name = sanitize(name)
     name = re.sub(r"&#([Xx]0*[aA]|0*10);", "", name)
     return sanitizeRefs(name)
 
@@ -215,11 +236,10 @@ def formatContent(content: str) -> str:
     return content
 
 
-# ここらへん直さないとだめな気がする
 def emojiToHTML(text: str) -> str:
     result = []
     for char in text:
-        if ord(char) > 0xFFFF:
+        if char.encode("shift-jis", "ignore").decode("shift-jis", "ignore") != char:
             result.append(f"&#{ord(char)};")
         else:
             result.append(char)
@@ -274,11 +294,11 @@ async def postThread(
 
     shownId = generateId(ipAddress)
 
-    ratelimit = await DBService.redis.get(f"postThreadRateLimits_{idRow['id']}")
+    ratelimit = await DBService.redis.get(f"PostThreadRateLimits_{idRow['id']}")
     if ratelimit and float(ratelimit) > time.time():
-        raise PostThreadRateLimit(float(ratelimit) - time.time())
+        raise PostRateLimit(float(ratelimit) - time.time())
     await DBService.redis.set(
-        f"postThreadRateLimits_{idRow['id']}", time.time() + 600, ex=60 * 60 * 24
+        f"PostThreadRateLimits_{idRow['id']}", time.time() + 600, ex=60 * 60 * 24
     )
 
     # キー被り対策
@@ -293,8 +313,8 @@ async def postThread(
     row = await DBService.pool.fetchrow(
         """
             INSERT INTO threads
-            (id, created_at, title, sort_key, owner_id, owner_shown_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (id, created_at, title, sort_key, owner_id, owner_shown_id, host)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
         """,
         f"{board.id}_{key}",
@@ -303,6 +323,7 @@ async def postThread(
         key,
         idRow["id"],
         shownId,
+        ipAddress,
     )
 
     row = dict(row)
@@ -316,14 +337,15 @@ async def postThread(
     await DBService.pool.execute(
         """
             INSERT INTO responses
-            (id, created_at, parent_id, author_id, shown_id, name, content, attributes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            (id, created_at, parent_id, author_id, shown_id, host, name, content, attributes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """,
         secrets.token_hex(6),
         datetime.now(tz),
         f"{board.id}_{key}",
         idRow["id"],
         shownId,
+        ipAddress,
         name,
         content,
         attributes,
@@ -344,9 +366,75 @@ async def postThread(
     return thread, idRow
 
 
-def addReaction(*, emojiChar: str, resNum: int):
-    if emojiChar not in emoji.EMOJI_DATA:
-        raise BackendError("EMOJI_NOT_FOUND", "絵文字が存在しません")
+async def checkReactions(content: str, userId: str, parentId: str) -> List[Response]:
+    responses = []
+
+    lines = content.splitlines()
+    for line in lines:
+        fields = line.split(" ", 2)
+        if len(fields) < 2:
+            continue
+        anker, emoji = fields
+
+        if not anker.startswith("&gt;&gt;") or not anker[8:].isdigit():
+            continue
+        if not emoji.startswith("+"):
+            continue
+
+        resNum = int(anker[8:])
+        emoji = html.unescape(emoji[1:])
+
+        responses.append(await addReaction(emoji, userId, parentId, resNum))
+        lines.remove(line)
+
+    return responses, "\n".join(lines)
+
+
+async def addReaction(emojiChar: str, userId: str, parentId: str, resNum: int):
+    if not emoji.is_emoji(emojiChar):
+        raise BackendError("REACTION_EMOJI_NOT_FOUND", "絵文字が存在しません")
+
+    board, thread = parentId.rsplit("_", 1)
+
+    try:
+        response = (await getResponsesInThread(board, thread))[resNum - 1]
+    except IndexError:
+        raise BackendError("REACTION_RESPONSE_NOT_FOUND", "レスが存在しません")
+
+    if len(response.reactions) >= 20:
+        raise BackendError(
+            "REACTION_LIMIT_EXCEEDED",
+            "1つのレスにつけられるリアクションの数は20個までです",
+        )
+
+    found = False
+    for reaction in response.reactions:
+        if userId in reaction.userIds:
+            if reaction.emoji.name == emojiToHTML(emojiChar):
+                reaction.userIds.remove(userId)
+                found = True
+        else:
+            if reaction.emoji.name == emojiToHTML(emojiChar):
+                reaction.userIds.append(userId)
+                found = True
+
+        if len(reaction.userIds) <= 0:
+            response.reactions.remove(reaction)
+
+    if not found:
+        response.reactions.append(
+            Reaction(
+                emoji=Emoji(id=None, name=emojiToHTML(emojiChar)), user_ids=[userId]
+            )
+        )
+
+    await updateResponse(response)
+
+    for reaction in response.reactions:
+        reaction.count = len(reaction.userIds)
+        del reaction.userIds
+
+    return response
 
 
 async def postResponse(
@@ -382,52 +470,68 @@ async def postResponse(
     if len(content) > 9192:
         raise ContentTooLong("本文", 9192)
 
+    if await DBService.pool.fetchval(
+        "SELECT COUNT(*) FROM responses WHERE parent_id = $1",
+        f"{thread.board}_{thread.id}",
+    ) >= thread.attributes.get("maxResponses", 1000):
+        raise BackendError(
+            "MAX_RESPONSE_EXDEEDED",
+            "スレッドが最大レス数に到達しました。次スレを建てるなら今です！！",
+        )
+
     shownId = generateId(ipAddress)
 
-    ratelimit = await DBService.redis.get(f"postResponseRateLimits_{idRow['id']}")
+    ratelimit = await DBService.redis.get(f"PostResponseRateLimits_{idRow['id']}")
     if ratelimit and float(ratelimit) > time.time():
-        raise PostResponseRateLimit(float(ratelimit) - time.time())
+        raise PostRateLimit(float(ratelimit) - time.time())
     await DBService.redis.set(
-        f"postResponseRateLimits_{idRow['id']}", time.time() + 5, ex=60 * 60 * 24
+        f"PostResponseRateLimits_{idRow['id']}", time.time() + 5, ex=60 * 60 * 24
     )
 
-    # キー被り対策
-    while True:
-        key = math.floor(time.time())
-        if not await DBService.pool.fetchrow(
-            "SELECT * FROM threads WHERE id = $1", f"{thread.board}_{key}"
-        ):
-            break
-        await asyncio.sleep(1)
-
-    row = await DBService.pool.fetchrow(
-        """
-            INSERT INTO responses
-            (id, created_at, parent_id, author_id, shown_id, name, content, attributes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING *
-        """,
-        secrets.token_hex(6),
-        datetime.now(tz),
-        f"{thread.board}_{thread.id}",
-        idRow["id"],
-        shownId,
-        name,
-        content,
-        attributes,
+    # リアクション
+    responses, content = await checkReactions(
+        content, idRow["id"], f"{thread.board}_{thread.id}"
     )
-    response = Response.model_validate(dict(row))
 
-    await DBService.pool.execute(
-        "UPDATE ONLY threads SET sort_key = $1 WHERE id = $2",
-        time.time(),
-        f"{thread.board}_{thread.id}",
-    )
+    if content.strip() != "":
+        row = await DBService.pool.fetchrow(
+            """
+                INSERT INTO responses
+                (id, created_at, parent_id, author_id, shown_id, host, name, content, attributes)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING *
+            """,
+            secrets.token_hex(6),
+            datetime.now(tz),
+            f"{thread.board}_{thread.id}",
+            idRow["id"],
+            shownId,
+            ipAddress,
+            name,
+            content,
+            attributes,
+        )
+        response = Response.model_validate(dict(row))
+
+        await DBService.pool.execute(
+            "UPDATE ONLY threads SET sort_key = $1 WHERE id = $2",
+            time.time(),
+            f"{thread.board}_{thread.id}",
+        )
+    else:
+        response = None
 
     async def notification():
         await sio.emit(
             "newResponse",
-            response.model_dump(mode="json", by_alias=True),
+            {
+                "response": response.model_dump(mode="json", by_alias=True)
+                if response
+                else None,
+                "updatedResponses": responseTypeAdapter.dump_python(
+                    responses, mode="json", by_alias=True
+                ),
+            },
             f"{thread.board}_{thread.id}",
         )
 

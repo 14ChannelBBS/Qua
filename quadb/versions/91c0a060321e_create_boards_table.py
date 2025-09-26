@@ -31,6 +31,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="名無しさん@14ちゃんねる！",
         ),
+        sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),
     )
 
 

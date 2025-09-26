@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{board.name}}</title>
+    <title>{{board.name | safe}}</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
@@ -61,8 +61,8 @@
           />
         </div>
         <div class="box">
-          <h1 class="title">{{ board.name }}</h1>
-          <p>{{ board.description }}</p>
+          <h1 class="title">{{ board.name | safe }}</h1>
+          <p>{{ board.description | safe }}</p>
           <p class="has-text-centered"><a href="/">■トップページ■</a></p>
         </div>
 

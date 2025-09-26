@@ -49,8 +49,29 @@ body::before {
   margin-bottom: 2px;
 }
 
+.reactions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reaction {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+
+  background-color: #d6ffd6;
+  border: solid 1px;
+  border-radius: 10px;
+}
+
 @media (prefers-color-scheme: dark) {
   body::before {
     filter: invert(100%);
+  }
+
+  .reaction {
+    background-color: #131e1a;
   }
 }
