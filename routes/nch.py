@@ -78,6 +78,19 @@ async def board(boardId: str):
     )
 
 
+@router.get("/{boardId:str}/head.txt", response_class=PlainTextResponse)
+async def head(boardId: str):
+    try:
+        board = await getBoard(boardId)
+    except NameError:
+        raise HTTPException(404)
+
+    return PlainTextResponse(
+        board.description.encode("shift_jis"),
+        media_type="text/plain; charset=shift_jis",
+    )
+
+
 @router.get("/{boardId:str}/subject.txt", response_class=PlainTextResponse)
 async def threads(boardId: str):
     try:
