@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from services.boards import (
     getBoard,
+    getBoards,
     getResponsesInThread,
     getThreadInBoard,
     getThreadsInBoard,
@@ -23,7 +24,11 @@ from services.exception import (
 
 router = APIRouter()
 
-version = "v2025.09.21"
+
+@router.get("/api/boards")
+async def boards():
+    board = await getBoards()
+    return board
 
 
 @router.get("/api/boards/{boardId:str}")
