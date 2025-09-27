@@ -1,3 +1,4 @@
+import html
 import traceback
 from typing import Dict
 from urllib.parse import parse_qs, quote
@@ -165,13 +166,14 @@ async def bbscgi(request: Request):
         k: v[0] for k, v in parse_qs(data.decode(), encoding="shift-jis").items()
     }
 
-    bbs = postDataDict.get("bbs", "")
+    bbs = html.unescape(postDataDict.get("bbs", ""))
     key = int(postDataDict.get("key", 0))
-    subject = postDataDict.get("subject", "")
-    FROM = postDataDict.get("FROM", "")
-    mail = postDataDict.get("mail", "")
-    MESSAGE = postDataDict.get("MESSAGE", "")
-    submit = postDataDict.get("submit", "")
+    time = int(postDataDict.get("time", 0))
+    subject = html.unescape(postDataDict.get("subject", ""))
+    FROM = html.unescape(postDataDict.get("FROM", ""))
+    mail = html.unescape(postDataDict.get("mail", ""))
+    MESSAGE = html.unescape(postDataDict.get("MESSAGE", ""))
+    submit = html.unescape(postDataDict.get("submit", ""))
 
     cookies = request.cookies
     ipAddress = (
@@ -281,6 +283,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -298,6 +302,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -315,6 +321,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -332,6 +340,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -349,6 +359,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -366,6 +378,8 @@ async def bbscgi(request: Request):
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,
@@ -380,10 +394,12 @@ async def bbscgi(request: Request):
             content=renderSJISPage(
                 "bbscgi_error.html",
                 {
-                    "message": f"内部エラーです: {e}",
+                    "message": f"内部エラーです！ {e}",
                     "ipaddr": ipAddress,
                     "bbs": bbs,
                     "key": key,
+                    "time": time,
+                    "subject": subject,
                     "FROM": FROM,
                     "mail": mail,
                     "MESSAGE": MESSAGE,

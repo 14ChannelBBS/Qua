@@ -123,7 +123,12 @@ async def apiPostThread(
         response.status_code = 401
         return {
             "detail": "VERIFICATION_REQUIRED",
-            "message": "認証が必要です。以下のチェックボックスをクリックして認証を行ってください。",
+            "message": (
+                "認証が必要です。以下のチェックボックスをクリックして認証を行ってください。<br>",
+                "14ちゃんねる！に書き込んだ時点及び認証を完了した時点で、",
+                '投稿者は<a href="/terms">利用規約</a>及び',
+                '<a href="/moderation-rules">モデレーションルール</a>の全てに同意したものとします。',
+            ),
             "sitekey": e.turnstileSiteKey,
         }
     except NameError:
@@ -217,7 +222,12 @@ async def apiPostResponse(
         response.status_code = 401
         return {
             "detail": "VERIFICATION_REQUIRED",
-            "message": "認証が必要です。以下のチェックボックスをクリックして認証を行ってください。",
+            "message": (
+                "認証が必要です。以下のチェックボックスをクリックして認証を行ってください。<br>",
+                "14ちゃんねる！に書き込んだ時点及び認証を完了した時点で、",
+                '投稿者は<a href="/terms">利用規約</a>及び',
+                '<a href="/moderation-rules">モデレーションルール</a>の全てに同意したものとします。',
+            ),
             "sitekey": e.turnstileSiteKey,
         }
     except NameError:

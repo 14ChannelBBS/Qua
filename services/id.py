@@ -10,9 +10,9 @@ dotenv.load_dotenv()
 tz = timezone(timedelta(hours=9), "Asia/Tokyo")
 
 
-def generateId(ipAddress: str):
+def generateId(ipAddress: str, boardId: str):
     timestamp = datetime.now(tz).strftime("%Y-%m-%d")
-    data = f"{timestamp}-{ipAddress}"
+    data = f"{timestamp}-{ipAddress}-{boardId}"
 
     idHash = hmac.new(
         os.getenv("idEncryptKey").encode("utf-8"), data.encode("utf-8"), hashlib.sha1

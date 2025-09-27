@@ -14,6 +14,7 @@ import emoji
 from pydantic import TypeAdapter
 
 from objects import Board, Emoji, Reaction, Response, Thread
+from services import emojiData
 from services.db import DBService
 from services.exception import (
     BackendError,
@@ -154,11 +155,11 @@ async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, An
 def sanitize(input: str):
     # 基本的なサニタイズ
     input = (
-        html.escape(
-            emoji.emojize(
-                input, delimiters=("::", "::"), language="alias", variant="emoji_type"
-            )
+        emoji.emojize(
+            input, delimiters=("::", "::"), language="alias", variant="emoji_type"
         )
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
         .replace("\r\n", "\n")
         .replace("\r", "\n")
         .strip()
@@ -200,7 +201,7 @@ def sanitizeRefs(text: str) -> str:
 
 
 def sanitizeThreadName(name: str):
-    name = sanitize(name)
+    name = sanitize(name).replace('"', "&quot;")
     name = re.sub(r"&#([Xx]0*[aA]|0*10);", "", name)
     return sanitizeRefs(name)
 
@@ -208,6 +209,7 @@ def sanitizeThreadName(name: str):
 def sanitizeName(name: str):
     name = (
         sanitize(name)
+        .replace('"', "&quot;")
         .replace("\n", "")
         .replace("◆", "◇")
         .replace("&#9670;", "◇")
@@ -232,7 +234,7 @@ def formatName(name: str, anonName: str) -> str:
 
 
 def formatContent(content: str) -> str:
-    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    content = content.replace('"', "&quot;")
     return content
 
 
@@ -292,7 +294,7 @@ async def postThread(
     if len(content) > 9192:
         raise ContentTooLong("本文", 9192)
 
-    shownId = generateId(ipAddress)
+    shownId = generateId(ipAddress, board.id)
 
     ratelimit = await DBService.redis.get(f"PostThreadRateLimits_{idRow['id']}")
     if ratelimit and float(ratelimit) > time.time():
@@ -391,8 +393,12 @@ async def checkReactions(content: str, userId: str, parentId: str) -> List[Respo
 
 
 async def addReaction(emojiChar: str, userId: str, parentId: str, resNum: int):
-    if not emoji.is_emoji(emojiChar):
-        raise BackendError("REACTION_EMOJI_NOT_FOUND", "絵文字が存在しません")
+    _emoji = emojiData.checkEmoji(emojiChar)
+    if isinstance(_emoji, bool):
+        if not emojiChar:
+            raise BackendError("REACTION_EMOJI_NOT_FOUND", "絵文字が存在しません")
+    else:
+        emojiChar = _emoji
 
     board, thread = parentId.rsplit("_", 1)
 
@@ -452,7 +458,7 @@ async def postResponse(
 
     idRow = await getVerifiedUser(command, cookies)
 
-    content = emojiToHTML(sanitize(formatContent(content)))
+    content = sanitize(formatContent(content))
     name = emojiToHTML(formatName(name, board.anonName))
 
     attributes = {}
@@ -479,7 +485,7 @@ async def postResponse(
             "スレッドが最大レス数に到達しました。次スレを建てるなら今です！！",
         )
 
-    shownId = generateId(ipAddress)
+    shownId = generateId(ipAddress, board.id)
 
     ratelimit = await DBService.redis.get(f"PostResponseRateLimits_{idRow['id']}")
     if ratelimit and float(ratelimit) > time.time():
@@ -508,7 +514,7 @@ async def postResponse(
             shownId,
             ipAddress,
             name,
-            content,
+            emojiToHTML(content),
             attributes,
         )
         response = Response.model_validate(dict(row))

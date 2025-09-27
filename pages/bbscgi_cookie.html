@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>書き込み確認</title>
+  </head>
+  <!--nobanner-->
+  <body style="background-color: #efefef">
+    <!-- 2ch_X:cookie -->
+    <font size="4" color="#FF0000"><b>書きこみ＆クッキー確認</b></font>
+    <blockquote style="margin-top: 4em">
+      タイトル： {{ subject if subject is not none else "" }}<br />
+      名前： <b>{{ FROM if FROM is not none else "" }}</b><br />
+      E-mail： {{ mail if mail is not none else "" }}<br />
+      内容：<br />
+      {{ MESSAGE if MESSAGE is not none else "" }}
+    </blockquote>
+
+    <div style="font-weight: bold">
+      投稿確認<br />
+      ・14ちゃんねる！に書き込んだ時点及び認証を完了した時点で、投稿者は<a
+        href="/terms"
+        >利用規約</a
+      >及び<a href="/moderation-rules">モデレーションルール</a
+      >の全てに同意したものとします。
+    </div>
+
+    <form method="POST" action="./bbs.cgi?guid=ON">
+      <input type="hidden" name="subject" value="{{ subject if FROM is not none
+      else "" }}" /> <input type="hidden" name="FROM" value="{{ FROM if FROM is
+      not none else "" }}" /> <input type="hidden" name="mail" value="{{ mail if
+      mail is not none else "" }}" /> <input type="hidden" name="MESSAGE"
+      value="{{ MESSAGE if MESSAGE is not none else "" }}" /> <input
+      type="hidden" name="bbs" value="{{ bbs if bbs is not none else "" }}" />
+      <input type="hidden" name="time" value="{{ time if time is not none else
+      "" }}" /> <input type="hidden" name="key" value="{{ key if key is not none
+      else "" }}" />
+      <input type="submit" value="上記全てを承諾して書き込む" /><br />
+    </form>
+
+    <p>変更する場合は戻るボタンで戻って書き直して下さい。</p>
+
+    <p>
+      現在、荒らし対策でクッキーを設定していないと書きこみできないようにしています。<br />
+      <font size="2">(cookieを設定するとこの画面はでなくなります。)</font><br />
+    </p>
+  </body>
+</html>

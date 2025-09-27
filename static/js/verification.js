@@ -10,7 +10,7 @@ function verificationPrompt(siteKey, message, callback) {
   const modal = "verification-modal";
   const target = document.getElementById(modal);
 
-  document.querySelector(".turnstile-message").textContent = message;
+  document.querySelector(".turnstile-message").innerHTML = message;
   document.querySelector(".turnstile-container").innerHTML = "";
 
   const widgetId = turnstile.render(".turnstile-container", {
