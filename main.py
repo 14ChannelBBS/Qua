@@ -30,7 +30,9 @@ fastAPI.add_middleware(GZipMiddleware, minimum_size=1000)
 moduleList = glob.glob("routes/*.py")
 for module in moduleList:
     fastAPI.include_router(
-        importlib.import_module(module.replace(".py", "").replace("\\", ".")).router
+        importlib.import_module(
+            module.replace(".py", "").replace("\\", ".").replace("/", ".")
+        ).router
     )
 
 app = socketio.ASGIApp(sio, fastAPI)

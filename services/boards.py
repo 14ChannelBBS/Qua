@@ -395,7 +395,7 @@ async def checkReactions(content: str, userId: str, parentId: str) -> List[Respo
 async def addReaction(emojiChar: str, userId: str, parentId: str, resNum: int):
     _emoji = emojiData.checkEmoji(emojiChar)
     if isinstance(_emoji, bool):
-        if not emojiChar:
+        if not _emoji:
             raise BackendError("REACTION_EMOJI_NOT_FOUND", "絵文字が存在しません")
     else:
         emojiChar = _emoji
