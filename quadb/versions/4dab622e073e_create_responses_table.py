@@ -36,6 +36,7 @@ def upgrade() -> None:
         sa.Column("content", sa.VARCHAR, nullable=True),
         sa.Column("reactions", sa.JSON(True), nullable=False, server_default="[]"),
         sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),
+        sa.Column("deleted", sa.BOOLEAN, nullable=False, server_default="false"),
     )
 
 

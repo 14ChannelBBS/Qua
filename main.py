@@ -8,11 +8,13 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from services.db import DBService
+from services.plugin import PluginService
 from services.socketio import sio
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    PluginService.loadPlugins()
     await DBService.run()
     yield
 

@@ -16,4 +16,6 @@ class Reaction(BaseModel):
     userIds: List[str]
     count: Optional[int] = None
 
-    model_config = ConfigDict(alias_generator=to_snake)
+    model_config = ConfigDict(
+        alias_generator=to_snake, populate_by_name=True, serialize_by_alias=False
+    )

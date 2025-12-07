@@ -38,6 +38,7 @@ def upgrade() -> None:
         sa.Column("owner_shown_id", sa.VARCHAR, nullable=False),
         sa.Column("host", sa.VARCHAR, nullable=False),
         sa.Column("attributes", sa.JSON(True), nullable=False, server_default="{}"),
+        sa.Column("deleted", sa.BOOLEAN, nullable=False, server_default="false"),
     )
 
 

@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from objects import Device, RenderingResponseEvent
 from routes.front import version
 from services.boards import (
     getBoard,
@@ -26,6 +27,7 @@ from services.exception import (
     PostRateLimit,
     VerificationRequired,
 )
+from services.plugin import PluginService
 
 router = APIRouter()
 env = Environment(
@@ -140,6 +142,16 @@ async def responses(boardId: str, threadId: int):
         raise HTTPException(404)
 
     for response in responses:
+        # Run event
+        event = RenderingResponseEvent(thread, response, Device.Monazilla)
+        for plugin in PluginService.plugins:
+            try:
+                plugin.onRenderingResponse(event)
+            except NotImplementedError:
+                pass
+
+        response = event.response
+
         del response.authorId
 
         if len(response.reactions) > 0:
@@ -154,8 +166,8 @@ async def responses(boardId: str, threadId: int):
     if response.attributes.get("cap"):
         name += "@" + response.attributes.get("cap") + " ★"
 
-        if response.attributes.get("cap_color"):
-            name = f'<font color="{response.attributes.get("cap_color")}">{name}</font>'
+        if response.attributes.get("nameColor"):
+            name = f'<font color="{response.attributes.get("nameColor")}">{name}</font>'
 
     return PlainTextResponse(
         (

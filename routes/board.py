@@ -4,6 +4,7 @@ import urllib.parse
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
+from objects import Device, RenderingResponseEvent
 from services.boards import (
     getBoard,
     getBoards,
@@ -21,6 +22,7 @@ from services.exception import (
     PostRateLimit,
     VerificationRequired,
 )
+from services.plugin import PluginService
 
 router = APIRouter()
 
@@ -38,7 +40,7 @@ async def board(boardId: str):
     except NameError:
         raise HTTPException(404)
 
-    return board
+    return board.model_dump(mode="json")
 
 
 @router.get("/api/boards/{boardId:str}/threads")
@@ -52,7 +54,7 @@ async def threads(boardId: str):
     for thread in threads:
         del thread.ownerId
 
-    return threads
+    return [thread.model_dump(mode="json") for thread in threads]
 
 
 @router.get("/api/boards/{boardId:str}/threads/{threadId:int}")
@@ -65,13 +67,23 @@ async def responses(boardId: str, threadId: int):
         raise HTTPException(404)
 
     for response in responses:
+        # Run event
+        event = RenderingResponseEvent(thread, response, Device.OfficialClient)
+        for plugin in PluginService.plugins:
+            try:
+                plugin.onRenderingResponse(event)
+            except NotImplementedError:
+                pass
+
+        response = event.response
+
         del response.authorId
 
         for reaction in response.reactions:
             reaction.count = len(reaction.userIds)
             del reaction.userIds
 
-    return responses
+    return [response.model_dump(mode="json") for response in responses]
 
 
 class PostThreadRequest(BaseModel):

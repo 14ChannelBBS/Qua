@@ -7,13 +7,24 @@ import re
 import secrets
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import dotenv
 import emoji
 from pydantic import TypeAdapter
 
-from objects import Board, Emoji, Reaction, Response, Thread
+from objects import (
+    Board,
+    Device,
+    Emoji,
+    IdRow,
+    Reaction,
+    RenderingResponseEvent,
+    Response,
+    ResponsePostEvent,
+    Thread,
+    ThreadPostEvent,
+)
 from services import emojiData
 from services.db import DBService
 from services.exception import (
@@ -24,6 +35,7 @@ from services.exception import (
     VerificationRequired,
 )
 from services.id import generateId, tz
+from services.plugin import PluginService
 from services.socketio import sio
 from services.trip import generateTrip
 
@@ -67,7 +79,7 @@ async def getThreadsInBoard(id: str, page: int = 0):
         """
             SELECT *
             FROM threads
-            WHERE id LIKE $1
+            WHERE id LIKE $1 AND deleted = false
             ORDER BY sort_key DESC
             OFFSET $2 LIMIT $3
         """,
@@ -89,7 +101,7 @@ async def getThreadsInBoard(id: str, page: int = 0):
 
 async def getThreadInBoard(boardId: str, id: int):
     row = await DBService.pool.fetchrow(
-        "SELECT * FROM threads WHERE id = $1", f"{boardId}_{id}"
+        "SELECT * FROM threads WHERE id = $1 AND deleted = false", f"{boardId}_{id}"
     )
     if not row:
         raise NameError(f"thread {id} not found")
@@ -107,13 +119,25 @@ async def getResponsesInThread(boardId: str, id: str):
     rows = []
 
     for _row in await DBService.pool.fetch(
-        "SELECT * FROM responses WHERE parent_id = $1 ORDER by created_at ASC",
+        "SELECT * FROM responses WHERE parent_id = $1 AND deleted = false ORDER by created_at ASC",
         f"{boardId}_{id}",
     ):
         row = dict(_row)
         rows.append(row)
 
     return responseTypeAdapter.validate_python(rows)
+
+
+async def updateThread(thread: Thread):
+    await DBService.pool.execute(
+        """
+            UPDATE ONLY responses
+            SET title = $2,
+            WHERE id = $1
+        """,
+        thread.id,
+        thread.title,
+    )
 
 
 async def updateResponse(response: Response):
@@ -133,12 +157,12 @@ async def updateResponse(response: Response):
         response.id,
         response.name,
         response.content,
-        reactionTypeAdapter.dump_python(response.reactions, mode="json", by_alias=True),
+        reactionTypeAdapter.dump_python(response.reactions, mode="json"),
         response.attributes,
     )
 
 
-async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, Any]:
+async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> IdRow:
     token = cookies.get("2ch_X")
     if not token:
         tokens = command.split("#", 1)
@@ -146,10 +170,28 @@ async def getVerifiedUser(command: str, cookies: Dict[str, str]) -> Dict[str, An
             raise VerificationRequired(os.getenv("turnstileSiteKey"))
         token = tokens[1]
 
-    idRow = await DBService.pool.fetchrow("SELECT * FROM ids WHERE token = $1", token)
-    if not idRow:
+    row = await DBService.pool.fetchrow("SELECT * FROM ids WHERE token = $1", token)
+    if not row:
         raise VerificationRequired(os.getenv("turnstileSiteKey"))
-    return dict(idRow)
+    return IdRow.model_validate(dict(row))
+
+
+async def deleteThread(thread: Thread, hard: bool = False):
+    if hard:
+        await DBService.pool.execute("DELETE from threads WHERE id = $1", thread.id)
+    else:
+        await DBService.pool.execute(
+            "UPDATE only threads SET deleted = true WHERE id = $1", thread.id
+        )
+
+
+async def deleteResponse(response: Response, hard: bool = False):
+    if hard:
+        await DBService.pool.execute("DELETE from responses WHERE id = $1", response.id)
+    else:
+        await DBService.pool.execute(
+            "UPDATE only responses SET deleted = true WHERE id = $1", response.id
+        )
 
 
 def sanitize(input: str):
@@ -248,12 +290,12 @@ def emojiToHTML(text: str) -> str:
     return "".join(result)
 
 
-async def updateIdIp(idRow: Dict[str, Any], ipAddress: str):
-    idRow["ips"].append(ipAddress)
+async def updateIdIp(idRow: IdRow, ipAddress: str):
+    idRow.ips.append(ipAddress)
     await DBService.pool.execute(
         "UPDATE ONLY ids SET ips = $1 WHERE token = $2",
-        list(set(idRow["ips"])),
-        idRow["token"],
+        list(set(idRow.ips)),
+        idRow.token,
     )
 
 
@@ -277,9 +319,9 @@ async def postThread(
 
     attributes = {}
     # キャップ
-    if idRow["cap"]:
-        attributes["cap"] = idRow["cap"]
-        attributes["cap_color"] = idRow["cap_color"]
+    if idRow.cap:
+        attributes["cap"] = idRow.cap
+        attributes["nameColor"] = idRow.capColor
 
     if len(title) <= 0:
         raise ContentTooShort("タイトル", 1)
@@ -296,12 +338,28 @@ async def postThread(
 
     shownId = generateId(ipAddress, board.id)
 
-    ratelimit = await DBService.redis.get(f"PostThreadRateLimits_{idRow['id']}")
+    ratelimit = await DBService.redis.get(f"PostThreadRateLimits_{idRow.id}")
     if ratelimit and float(ratelimit) > time.time():
         raise PostRateLimit(float(ratelimit) - time.time())
     await DBService.redis.set(
-        f"PostThreadRateLimits_{idRow['id']}", time.time() + 600, ex=60 * 60 * 24
+        f"PostThreadRateLimits_{idRow.id}", time.time() + 600, ex=60 * 60 * 24
     )
+
+    # Run event
+    event = ThreadPostEvent(
+        board, title, name, command, content, attributes, idRow, shownId
+    )
+    for plugin in PluginService.plugins:
+        try:
+            await plugin.onThreadPost(event)
+        except NotImplementedError:
+            pass
+
+    title = event.title
+    name = event.name
+    content = event.content
+    attributes = event.attributes
+    shownId = event.shownId
 
     # キー被り対策
     while True:
@@ -323,7 +381,7 @@ async def postThread(
         datetime.now(tz),
         title,
         key,
-        idRow["id"],
+        idRow.id,
         shownId,
         ipAddress,
     )
@@ -345,7 +403,7 @@ async def postThread(
         secrets.token_hex(6),
         datetime.now(tz),
         f"{board.id}_{key}",
-        idRow["id"],
+        idRow.id,
         shownId,
         ipAddress,
         name,
@@ -357,7 +415,7 @@ async def postThread(
         await sio.emit(
             "updateThreads",
             threadTypeAdapter.dump_python(
-                await getThreadsInBoard(board.id), mode="json", by_alias=True
+                await getThreadsInBoard(board.id), mode="json"
             ),
             thread.board,
         )
@@ -463,9 +521,9 @@ async def postResponse(
 
     attributes = {}
     # キャップ
-    if idRow["cap"]:
-        attributes["cap"] = idRow["cap"]
-        attributes["cap_color"] = idRow["cap_color"]
+    if idRow.cap:
+        attributes["cap"] = idRow.cap
+        attributes["nameColor"] = idRow.capColor
 
     if len(content) <= 0:
         raise ContentTooShort("本文", 1)
@@ -487,17 +545,32 @@ async def postResponse(
 
     shownId = generateId(ipAddress, board.id)
 
-    ratelimit = await DBService.redis.get(f"PostResponseRateLimits_{idRow['id']}")
+    ratelimit = await DBService.redis.get(f"PostResponseRateLimits_{idRow.id}")
     if ratelimit and float(ratelimit) > time.time():
         raise PostRateLimit(float(ratelimit) - time.time())
     await DBService.redis.set(
-        f"PostResponseRateLimits_{idRow['id']}", time.time() + 5, ex=60 * 60 * 24
+        f"PostResponseRateLimits_{idRow.id}", time.time() + 5, ex=60 * 60 * 24
     )
 
     # リアクション
     responses, content = await checkReactions(
-        content, idRow["id"], f"{thread.board}_{thread.id}"
+        content, idRow.id, f"{thread.board}_{thread.id}"
     )
+
+    # Run event
+    event = ResponsePostEvent(
+        thread, name, command, content, attributes, idRow, shownId
+    )
+    for plugin in PluginService.plugins:
+        try:
+            await plugin.onResponsePost(event)
+        except NotImplementedError:
+            pass
+
+    name = event.name
+    content = event.content
+    attributes = event.attributes
+    shownId = event.shownId
 
     if content.strip() != "":
         row = await DBService.pool.fetchrow(
@@ -510,7 +583,7 @@ async def postResponse(
             secrets.token_hex(6),
             datetime.now(tz),
             f"{thread.board}_{thread.id}",
-            idRow["id"],
+            idRow.id,
             shownId,
             ipAddress,
             name,
@@ -528,14 +601,25 @@ async def postResponse(
         response = None
 
     async def notification():
+        nonlocal response
+
+        if response:
+            # Run event
+            event = RenderingResponseEvent(thread, response, Device.OfficialClient)
+            for plugin in PluginService.plugins:
+                try:
+                    plugin.onRenderingResponse(event)
+                except NotImplementedError:
+                    pass
+
+            response = event.response
+
         await sio.emit(
             "newResponse",
             {
-                "response": response.model_dump(mode="json", by_alias=True)
-                if response
-                else None,
+                "response": response.model_dump(mode="json") if response else None,
                 "updatedResponses": responseTypeAdapter.dump_python(
-                    responses, mode="json", by_alias=True
+                    responses, mode="json"
                 ),
             },
             f"{thread.board}_{thread.id}",
@@ -544,7 +628,7 @@ async def postResponse(
         await sio.emit(
             "updateThreads",
             threadTypeAdapter.dump_python(
-                await getThreadsInBoard(board.id), mode="json", by_alias=True
+                await getThreadsInBoard(board.id), mode="json"
             ),
             thread.board,
         )

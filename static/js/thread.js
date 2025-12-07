@@ -44,13 +44,13 @@ async function appendResponse(response, i, responsesElement) {
   const responseDetailElement = document.createElement("span");
   responseDetailElement.classList.add("detail");
   responseDetailElement.innerHTML = `${i + 1} : <span style="color: ${
-    response.attributes.cap_color ?? "green"
+    response.attributes.nameColor ?? "green"
   };"><b>${emojiParse(response.name)}${
     response.attributes.cap
       ? "@" + emojiParse(response.attributes.cap) + " ★"
       : ""
-  }</b></span> : ${new Date(response.created_at).toLocaleString()} ID: ${
-    response.shown_id
+  }</b></span> : ${new Date(response.createdAt).toLocaleString()} ID: ${
+    response.shownId
   }`;
   element.append(responseDetailElement);
 

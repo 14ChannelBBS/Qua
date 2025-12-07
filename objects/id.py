@@ -1,15 +1,17 @@
-from typing import Dict
+from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_snake
 
 
-class Board(BaseModel):
+class IdRow(BaseModel):
+    token: str
     id: str
-    name: str
-    description: str
-    anonName: str
-    attributes: Dict[str, str]
+    ips: List[str]
+    createdAt: datetime
+    cap: Optional[str] = None
+    capColor: Optional[str] = None
 
     model_config = ConfigDict(
         alias_generator=to_snake, populate_by_name=True, serialize_by_alias=False

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_snake
@@ -16,6 +16,8 @@ class Response(BaseModel):
     name: str
     content: str
     reactions: List[Reaction]
-    attributes: Dict[str, str]
+    attributes: Dict[str, Any]
 
-    model_config = ConfigDict(alias_generator=to_snake)
+    model_config = ConfigDict(
+        alias_generator=to_snake, populate_by_name=True, serialize_by_alias=False
+    )

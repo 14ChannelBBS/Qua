@@ -11,7 +11,7 @@ function appendThread(threads, threadListElement) {
     const element = document.createElement("a");
     element.classList.add("box");
     element.href = `/${board}/${thread.id}`;
-    element.title = `Owner ID: ${thread.owner_shown_id}`;
+    element.title = `Owner ID: ${thread.ownerShownId}`;
 
     const threadTitleElement = document.createElement("p");
     threadTitleElement.innerHTML = `${emojiParse(thread.title)} (${
@@ -22,7 +22,7 @@ function appendThread(threads, threadListElement) {
 
     const dateTimeElement = document.createElement("p");
     dateTimeElement.textContent = `${new Date(
-      thread.created_at
+      thread.createdAt
     ).toLocaleString()}`;
     element.append(dateTimeElement);
 
